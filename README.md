@@ -1,5 +1,7 @@
 # Air780E 短信转发
 
+## 保姆级教程：https://kdocs.cn/l/coe1ozIlSX70
+
 ## :sparkles: Feature
 
 - [x] 多种通知方式
