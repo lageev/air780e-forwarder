@@ -1,4 +1,4 @@
-# Air780E 短信转发
+# Air700E / Air780E / Air780EG 短信转发
 
 ## 保姆级教程：https://kdocs.cn/l/coe1ozIlSX70
 
@@ -13,6 +13,8 @@
     - [x] [企业微信群机器人 WeCom](https://developer.work.weixin.qq.com/document/path/91770)
     - [x] [Pushover](https://pushover.net/api)
     - [x] [邮件 next-smtp-proxy](https://github.com/0wQ/next-smtp-proxy)
+    - [x] [Gotify](https://gotify.net)
+    - [x] [Inotify](https://github.com/xpnas/Inotify) / [合宙官方的推送服务](https://push.luatos.org)
 - [x] 通过短信控制设备
     - [x] 发短信, 格式: `SMS,10010,余额查询`
 - [x] 定时基站定位
@@ -29,7 +31,7 @@
 
 ### 2. 烧录脚本
 
-> 推荐使用 `core` 目录下的固件, 本项目可能会使用一些合宙官方固件还未更新的 API
+> 推荐使用 `core` 目录下的固件
 >
 > `core` 目录下文件名中带有 `RNDIS` 的, 支持 RNDIS 网卡功能, 如果 SIM 卡流量不多请勿选择
 

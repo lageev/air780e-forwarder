@@ -31,6 +31,32 @@ local notify = {
         log.info("util_notify", "POST", config.TELEGRAM_PROXY_API)
         return util_http.fetch(nil, "POST", config.TELEGRAM_PROXY_API, header, msg)
     end,
+    -- 发送到 gotify
+    ["gotify"] = function(msg)
+        if config.GOTIFY_API == nil or config.GOTIFY_API == "" then
+            log.error("util_notify", "未配置 `config.GOTIFY_API`")
+            return
+        end
+        if config.GOTIFY_TOKEN == nil or config.GOTIFY_TOKEN == "" then
+            log.error("util_notify", "未配置 `config.GOTIFY_TOKEN`")
+            return
+        end
+
+        local url = config.GOTIFY_API .. "/message?token=" .. config.GOTIFY_TOKEN
+        local header = {
+            ["Content-Type"] = "application/json; charset=utf-8"
+        }
+        local body = {
+            title = config.GOTIFY_TITLE,
+            message = msg,
+            priority = config.GOTIFY_PRIORITY
+        }
+        local json_data = json.encode(body)
+        json_data = string.gsub(json_data, "\\b", "\\n")
+
+        log.info("util_notify", "POST", config.GOTIFY_API)
+        return util_http.fetch(nil, "POST", url, header, json_data)
+    end,
     -- 发送到 pushdeer
     ["pushdeer"] = function(msg)
         if config.PUSHDEER_API == nil or config.PUSHDEER_API == "" then
@@ -274,6 +300,23 @@ local function append()
     if band >= 0 then
         msg = msg .. "\n频段: B" .. band
     end
+
+    -- 流量统计
+    local uplinkGB, uplinkB, downlinkGB, downlinkB = mobile.dataTraffic()
+    uplinkB = uplinkGB * 1024 * 1024 * 1024 + uplinkB
+    downlinkB = downlinkGB * 1024 * 1024 * 1024 + downlinkB
+    local function formatBytes(bytes)
+        if bytes < 1024 then
+            return bytes .. "B"
+        elseif bytes < 1024 * 1024 then
+            return string.format("%.2fKB", bytes / 1024)
+        elseif bytes < 1024 * 1024 * 1024 then
+            return string.format("%.2fMB", bytes / 1024 / 1024)
+        else
+            return string.format("%.2fGB", bytes / 1024 / 1024 / 1024)
+        end
+    end
+    -- msg = msg .. "\n流量: ↑" .. formatBytes(uplinkB) .. " ↓" .. formatBytes(downlinkB)
 
     -- 位置
     local _, _, map_link = util_location.get()
