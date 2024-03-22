@@ -1,4 +1,4 @@
-# Air700E / Air780E / Air780EG 短信转发
+# Air700E / Air780E / Air780EP / Air780EPV 短信转发 来电通知
 
 ## 保姆级教程：https://kdocs.cn/l/coe1ozIlSX70
 
@@ -15,6 +15,7 @@
     - [x] [邮件 next-smtp-proxy](https://github.com/0wQ/next-smtp-proxy)
     - [x] [Gotify](https://gotify.net)
     - [x] [Inotify](https://github.com/xpnas/Inotify) / [合宙官方的推送服务](https://push.luatos.org)
+    - [x] 邮件 (SMTP协议)
 - [x] 通过短信控制设备
     - [x] 发短信, 格式: `SMS,10010,余额查询`
 - [x] 定时基站定位
@@ -24,14 +25,17 @@
 - [x] 低功耗模式 (使用 IoT Power 测量, 开发板待机 30min 平均电流 2.5mA)
 - [x] 使用消息队列, 经测试同时发送几百条通知, 不会卡死
 - [x] 通知发送失败, 自动重发
+- [x] 支持主从模式，一主对多从，从机通过串口转发消息，主机接受消息后转发到通知服务
 
 ## :hammer: Usage
+
+> 可以参考 [lageev](https://github.com/lageev/air780e-forwarder) 写的教程 https://kdocs.cn/l/coe1ozIlSX70
 
 ### 1. 按注释修改 `script/config.lua` 配置文件
 
 ### 2. 烧录脚本
 
-> 推荐使用 `core` 目录下的固件
+> 固件下载 https://gitee.com/openLuat/LuatOS/releases 选择带有 EC618 或 Air780 关键字的固件
 >
 > `core` 目录下文件名中带有 `RNDIS` 的, 支持 RNDIS 网卡功能, 如果 SIM 卡流量不多请勿选择
 

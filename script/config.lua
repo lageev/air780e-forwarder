@@ -1,11 +1,19 @@
 return {
     -- 通知类型, 支持配置多个
-    -- NOTIFY_TYPE = {"telegram", "pushdeer", "bark", "dingtalk", "feishu", "wecom", "pushover", "inotify", "next-smtp-proxy", "gotify"},
-    NOTIFY_TYPE = "pushdeer",
+    -- NOTIFY_TYPE = {"custom_post", "telegram", "pushdeer", "bark", "dingtalk", "feishu", "wecom", "pushover", "inotify", "next-smtp-proxy", "gotify", "serial"},
+    NOTIFY_TYPE = "custom_post",
     --
-    -- telegram 通知配置, https://github.com/0wQ/telegram-notify
-    TELEGRAM_PROXY_API = "",
-    TELEGRAM_TOKEN = "",
+    -- 角色类型, 用于区分主从机, 仅当使用串口转发 NOTIFY_TYPE = "serial" 时才需要配置
+    -- MASTER: 主机, 可主动联网; SLAVE: 从机, 不可主动联网, 通过串口发送数据
+    ROLE = "MASTER",
+    --
+    -- custom_post 通知配置, 自定义 POST 请求, CUSTOM_POST_BODY_TABLE 中的 {msg} 会被替换为通知内容
+    CUSTOM_POST_URL = "https://sctapi.ftqq.com/<SENDKEY>.send",
+    CUSTOM_POST_CONTENT_TYPE = "application/json",
+    CUSTOM_POST_BODY_TABLE = {["title"] = "这里是标题", ["desp"] = "这里是内容, 会被替换掉:\n{msg}\n{msg}"},
+    --
+    -- telegram 通知配置, https://github.com/0wQ/telegram-notify 或者自行反代
+    TELEGRAM_API = "https://api.telegram.org/bot{token}/sendMessage",
     TELEGRAM_CHAT_ID = "",
     --
     -- pushdeer 通知配置, https://www.pushdeer.com/
@@ -17,7 +25,9 @@ return {
     BARK_KEY = "",
     --
     -- dingtalk 通知配置, https://open.dingtalk.com/document/robots/custom-robot-access
+    -- 如果是加签方式, 请填写 DINGTALK_SECRET, 否则留空为自定义关键词方式, https://open.dingtalk.com/document/robots/customize-robot-security-settings
     DINGTALK_WEBHOOK = "",
+    DINGTALK_SECRET = "",
     --
     -- feishu 通知配置, https://open.feishu.cn/document/ukTMukTMukTM/ucTM5YjL3ETO24yNxkjN
     FEISHU_WEBHOOK = "",
@@ -42,6 +52,16 @@ return {
     NEXT_SMTP_PROXY_TO_EMAIL = "",
     NEXT_SMTP_PROXY_SUBJECT = "来自 Air780E 的通知",
     --
+    -- smtp 通知配置(可能不支持加密协议)
+    SMTP_HOST = "smtp.qq.com",
+    SMTP_PORT = 25,
+    SMTP_USERNAME = "",
+    SMTP_PASSWORD = "",
+    SMTP_MAIL_FROM = "",
+    SMTP_MAIL_TO = "",
+    SMTP_MAIL_SUBJECT = "来自 Air780E 的通知",
+    SMTP_TLS_ENABLE = false,
+    --
     -- gotify 通知配置, https://gotify.net/
     GOTIFY_API = "",
     GOTIFY_TITLE = "Air780E",
@@ -65,4 +85,7 @@ return {
     --
     -- 开启低功耗模式, USB 断开连接无法查看日志, RNDIS 网卡会断开
     LOW_POWER_MODE = false,
+    --
+    -- 本机号码, 优先使用 mobile.number() 接口获取, 如果获取不到则使用此号码
+    FALLBACK_LOCAL_NUMBER = "+8618888888888",
 }
