@@ -19,38 +19,47 @@ sys.timerLoopStart(wdt.feed, 3000)
 socket.setDNS(nil, 1, "119.29.29.29")
 socket.setDNS(nil, 2, "223.5.5.5")
 
--- 设置 SIM 自动恢复(单位: 毫秒), 搜索小区信息间隔(单位: 毫秒), 最大搜索时间(单位: 秒)
-mobile.setAuto(1000 * 10)
+-- SIM 自动恢复, 周期性获取小区信息, 网络遇到严重故障时尝试自动恢复等功能
+mobile.setAuto(10000, 300000, 8, true, 120000)
 
 -- 开启 IPv6
-mobile.ipv6(true)
+-- mobile.ipv6(true)
+
+-- 初始化 fskv
+log.info("main", "fskv.init", fskv.init())
 
 -- POWERKEY
-local button_last_press_time, button_last_release_time = 0, 0
-gpio.setup(35, function()
-    local current_time = mcu.ticks()
-    -- 按下
-    if gpio.get(35) == 0 then
-        button_last_press_time = current_time -- 记录最后一次按下时间
-        return
-    end
-    -- 释放
-    if button_last_press_time == 0 then -- 开机前已经按下, 开机后释放
-        return
-    end
-    if current_time - button_last_release_time < 250 then -- 防止连按
-        return
-    end
-    local duration = current_time - button_last_press_time -- 按键持续时间
-    button_last_release_time = current_time -- 记录最后一次释放时间
-    if duration > 2000 then
-        log.debug("EVENT.POWERKEY_LONG_PRESS", duration)
-        sys.publish("POWERKEY_LONG_PRESS", duration)
-    elseif duration > 50 then
-        log.debug("EVENT.POWERKEY_SHORT_PRESS", duration)
-        sys.publish("POWERKEY_SHORT_PRESS", duration)
-    end
-end, gpio.PULLUP)
+local rtos_bsp = rtos.bsp()
+local pin_table = { ["EC618"] = 35, ["EC718P"] = 46 }
+local powerkey_pin = pin_table[rtos_bsp]
+
+if powerkey_pin then
+    local button_last_press_time, button_last_release_time = 0, 0
+    gpio.setup(powerkey_pin, function()
+        local current_time = mcu.ticks()
+        -- 按下
+        if gpio.get(powerkey_pin) == 0 then
+            button_last_press_time = current_time -- 记录最后一次按下时间
+            return
+        end
+        -- 释放
+        if button_last_press_time == 0 then -- 开机前已经按下, 开机后释放
+            return
+        end
+        if current_time - button_last_release_time < 250 then -- 防止连按
+            return
+        end
+        local duration = current_time - button_last_press_time -- 按键持续时间
+        button_last_release_time = current_time -- 记录最后一次释放时间
+        if duration > 2000 then
+            log.debug("EVENT.POWERKEY_LONG_PRESS", duration)
+            sys.publish("POWERKEY_LONG_PRESS", duration)
+        elseif duration > 50 then
+            log.debug("EVENT.POWERKEY_SHORT_PRESS", duration)
+            sys.publish("POWERKEY_SHORT_PRESS", duration)
+        end
+    end, gpio.PULLUP)
+end
 
 -- 加载模块
 config = require "config"
@@ -105,43 +114,62 @@ end)
 
 sys.taskInit(function()
     -- 等待网络环境准备就绪
-    sys.waitUntil("IP_READY", 20000)
+    sys.waitUntil("IP_READY", 1000 * 60 * 5)
 
     util_netled.init()
 
     -- 开机通知
-    if config.BOOT_NOTIFY then sys.timerStart(util_notify.add, 1000 * 5, "#BOOT") end
+    if config.BOOT_NOTIFY then
+        sys.timerStart(util_notify.add, 1000 * 5, "#BOOT_" .. pm.lastReson())
+    end
+
+    -- 定时同步时间
+    if os.time() < 1714500000 then
+        socket.sntp()
+    end
+    if type(config.SNTP_INTERVAL) == "number" and config.SNTP_INTERVAL >= 1000 * 60 then
+        sys.timerLoopStart(socket.sntp, config.SNTP_INTERVAL)
+    end
 
     -- 定时查询流量
-    if config.QUERY_TRAFFIC_INTERVAL and config.QUERY_TRAFFIC_INTERVAL >= 1000 * 60 then
+    if type(config.QUERY_TRAFFIC_INTERVAL) == "number" and config.QUERY_TRAFFIC_INTERVAL >= 1000 * 60 then
         sys.timerLoopStart(util_mobile.queryTraffic, config.QUERY_TRAFFIC_INTERVAL)
     end
 
     -- 定时基站定位
-    if config.LOCATION_INTERVAL and config.LOCATION_INTERVAL >= 1000 * 30 then
+    if type(config.LOCATION_INTERVAL) == "number" and config.LOCATION_INTERVAL >= 1000 * 60 then
         util_location.refresh(nil, true)
         sys.timerLoopStart(util_location.refresh, config.LOCATION_INTERVAL)
+    end
+
+    -- 定时上报
+    if type(config.REPORT_INTERVAL) == "number" and config.REPORT_INTERVAL >= 1000 * 60 then
+        sys.timerLoopStart(function() util_notify.add("#ALIVE_REPORT") end, config.REPORT_INTERVAL)
     end
 
     -- 电源键短按发送测试通知
     sys.subscribe("POWERKEY_SHORT_PRESS", function() util_notify.add("#ALIVE") end)
     -- 电源键长按查询流量
     sys.subscribe("POWERKEY_LONG_PRESS", util_mobile.queryTraffic)
+end)
 
-    -- 开启低功耗模式
-    if config.LOW_POWER_MODE then
-        sys.wait(1000 * 15)
-        log.warn("main", "即将关闭 usb 电源, 如需查看日志请在配置中关闭低功耗模式")
-        sys.wait(1000 * 5)
-        gpio.setup(23, nil)
-        gpio.close(33)
-        pm.power(pm.USB, false) -- 关闭 USB
-        pm.power(pm.GPS, false)
-        pm.power(pm.GPS_ANT, false)
-        pm.power(pm.DAC_EN, false)
-        pm.force(pm.LIGHT) -- 进入休眠
+sys.taskInit(function()
+    if type(config.PIN_CODE) ~= "string" or config.PIN_CODE == "" then
+        return
+    end
+    -- 开机等待 5 秒仍未联网, 再进行 pin 验证
+    if not sys.waitUntil("IP_READY", 1000 * 5) then
+        util_mobile.pinVerify(config.PIN_CODE)
     end
 end)
+
+-- 定时开关飞行模式
+if type(config.FLYMODE_INTERVAL) == "number" and config.FLYMODE_INTERVAL >= 1000 * 60 then
+    sys.timerLoopStart(function()
+        mobile.flymode(0, true)
+        mobile.flymode(0, false)
+    end, config.FLYMODE_INTERVAL)
+end
 
 -- 通话相关
 local is_calling = false
