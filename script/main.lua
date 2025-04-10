@@ -20,7 +20,7 @@ socket.setDNS(nil, 1, "119.29.29.29")
 socket.setDNS(nil, 2, "223.5.5.5")
 
 -- SIM 自动恢复, 周期性获取小区信息, 网络遇到严重故障时尝试自动恢复等功能
-mobile.setAuto(10000, 300000, 8, true, 120000)
+mobile.setAuto(10000, 30000, 8, true, 60000)
 
 -- 开启 IPv6
 -- mobile.ipv6(true)
@@ -30,7 +30,7 @@ log.info("main", "fskv.init", fskv.init())
 
 -- POWERKEY
 local rtos_bsp = rtos.bsp()
-local pin_table = { ["EC618"] = 35, ["EC718P"] = 46 }
+local pin_table = { ["EC618"] = 35, ["EC718P"] = 46, ["EC718PV"] = 46 }
 local powerkey_pin = pin_table[rtos_bsp]
 
 if powerkey_pin then
@@ -58,7 +58,7 @@ if powerkey_pin then
             log.debug("EVENT.POWERKEY_SHORT_PRESS", duration)
             sys.publish("POWERKEY_SHORT_PRESS", duration)
         end
-    end, gpio.PULLUP)
+    end, gpio.PULLUP, gpio.FALLING)
 end
 
 -- 加载模块
@@ -94,6 +94,26 @@ if containsValue(config.NOTIFY_TYPE, "serial") then
     end)
 end
 
+-- 判断一个元素是否在一个表中
+local function isElementInTable(myTable, target)
+    for _, value in ipairs(myTable) do
+        if value == target then
+            return true
+        end
+    end
+    return false
+end
+
+-- 判断白名单号码是否符合触发短信控制的条件
+local function isWhiteListNumber(sender_number)
+    -- 判断如果未设置白名单号码, 禁止所有号码触发
+    if type(config.SMS_CONTROL_WHITELIST_NUMBERS) ~= "table" or #config.SMS_CONTROL_WHITELIST_NUMBERS == 0 then
+        return false
+    end
+    -- 已设置白名单号码, 判断是否在白名单中
+    return isElementInTable(config.SMS_CONTROL_WHITELIST_NUMBERS, sender_number)
+end
+
 -- 短信接收回调
 sms.setNewSmsCb(function(sender_number, sms_content, m)
     local time = string.format("%d/%02d/%02d %02d:%02d:%02d", m.year + 2000, m.mon, m.day, m.hour, m.min, m.sec)
@@ -101,11 +121,14 @@ sms.setNewSmsCb(function(sender_number, sms_content, m)
 
     -- 短信控制
     local is_sms_ctrl = false
-    local receiver_number, sms_content_to_be_sent = sms_content:match("^SMS,(+?%d+),(.+)$")
-    receiver_number, sms_content_to_be_sent = receiver_number or "", sms_content_to_be_sent or ""
-    if sms_content_to_be_sent ~= "" and receiver_number ~= "" and #receiver_number >= 5 and #receiver_number <= 20 then
-        sms.send(receiver_number, sms_content_to_be_sent)
-        is_sms_ctrl = true
+    -- 判断发送者是否为白名单号码
+    if isWhiteListNumber(sender_number) then
+        local receiver_number, sms_content_to_be_sent = sms_content:match("^SMS,(+?%d+),(.+)$")
+        receiver_number, sms_content_to_be_sent = receiver_number or "", sms_content_to_be_sent or ""
+        if sms_content_to_be_sent ~= "" and receiver_number ~= "" and #receiver_number >= 5 and #receiver_number <= 20 then
+            sms.send(receiver_number, sms_content_to_be_sent)
+            is_sms_ctrl = true
+        end
     end
 
     -- 发送通知
@@ -151,6 +174,13 @@ sys.taskInit(function()
     sys.subscribe("POWERKEY_SHORT_PRESS", function() util_notify.add("#ALIVE") end)
     -- 电源键长按查询流量
     sys.subscribe("POWERKEY_LONG_PRESS", util_mobile.queryTraffic)
+
+    sys.wait(60000);
+    -- EC618配置小区重选信号差值门限，不能大于15dbm，必须在飞行模式下才能用
+    mobile.flymode(0, true)
+    mobile.config(mobile.CONF_RESELTOWEAKNCELL, 10)
+    mobile.config(mobile.CONF_STATICCONFIG, 1) -- 开启网络静态优化
+    mobile.flymode(0, false)
 end)
 
 sys.taskInit(function()
@@ -166,8 +196,13 @@ end)
 -- 定时开关飞行模式
 if type(config.FLYMODE_INTERVAL) == "number" and config.FLYMODE_INTERVAL >= 1000 * 60 then
     sys.timerLoopStart(function()
-        mobile.flymode(0, true)
-        mobile.flymode(0, false)
+        sys.taskInit(function()
+            log.info("main", "定时开关飞行模式")
+            mobile.reset()
+            sys.wait(1000)
+            mobile.flymode(0, true)
+            mobile.flymode(0, false)
+        end)
     end, config.FLYMODE_INTERVAL)
 end
 
